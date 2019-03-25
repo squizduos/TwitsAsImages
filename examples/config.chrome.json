@@ -1,0 +1,25 @@
+{
+  "headless_browser": {
+    "name": "chrome",
+    "executable_path": "./chromedriver"
+  },
+  "twit_embed": {
+    "hideConversation": "off",
+    "theme": "dark",
+    "lang": "en",
+    "partner": "",
+    "hide_thread": "false",
+    "height": "512"
+  },
+  "download": {
+    "path": "images",
+    "template": "example-complex-{no}.png"
+  },
+  "postprocess": {
+    "trim": true,
+    "resize": true,
+    "resize_options": {
+      "width": "512"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "headless_browser": {
+    "name": "phantomjs",
+    "executable_path": "./phantomjs"
+  },
+  "twit_embed": {
+    "hideConversation": "on",
+    "theme": "light",
+    "lang": "uk",
+    "partner": "",
+    "hide_thread": "true",
+    "height": "512"
+  },
+  "download": {
+    "path": "images"
+  }
+}

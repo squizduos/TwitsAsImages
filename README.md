@@ -243,5 +243,9 @@ There are two available operations:
      
 ## Changelog
 
+### Version 0.2
+ - Updated CLI using `click` library
+ 
+
 ### Version 0.1
  - First version

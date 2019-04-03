@@ -80,10 +80,8 @@ class PhantomJSBrowser(HeadlessBrowser):
     def __init__(self, **options):
         super().__init__(**options)
 
-        executable_path = os.path.join(CURRENT_PATH, options.get('executable_path'))
-
         self.browser = webdriver.PhantomJS(
-            executable_path=executable_path,
+            executable_path=options.get('executable_path'),
             service_log_path="/dev/null"
         )
 
@@ -92,14 +90,12 @@ class ChromeBrowser(HeadlessBrowser):
     def __init__(self, **options):
         super().__init__(**options)
 
-        executable_path = os.path.join(CURRENT_PATH, options.get('executable_path'))
-
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--hide-scrollbars")
 
         self.browser = webdriver.Chrome(
-            executable_path,
+            executable_path=options.get('executable_path'),
             chrome_options=chrome_options,
             service_log_path="/dev/null"
         )

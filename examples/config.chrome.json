@@ -13,7 +13,8 @@
   },
   "download": {
     "path": "images",
-    "template": "example-complex-{no}.png"
+    "name": "example-complex-{no}.png",
+    "update": true
   },
   "postprocess": {
     "trim": true,

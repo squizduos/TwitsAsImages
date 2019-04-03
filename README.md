@@ -40,7 +40,7 @@ Here is the [URL](https://twitter.com/radiobabay/status/1109932072796336128).
 For saving this twit as image, just run:
 
 ```bash
-# pipenv run python src/cli.py --output-file images/example-simple.png https://twitter.com/radiobabay/status/1109932072796336128
+$ ./socialscreen shot --destination images/ --filename example-simple.png https://twitter.com/radiobabay/status/1109932072796336128
 ```
 
 Make sure, that you have installed [PhantomJS](https://github.com/ariya/phantomjs/releases).
@@ -53,21 +53,43 @@ File will be located at *images/images/example-simple.png*.
 
 ### Advanced CLI
 
-CLI have some extra options.
+CLI have two commands: `process` and `shot`. Here are descriptions of these commands.
 
-| CLI option          	| Description                                                                                                                                                                       	|
-|---------------------	|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------	|
-| --config-file       	| Application confugiration file location. <br/> <br/> Default: *config.json*.<br/> **Required!**                                                                                        	|
-| --twits-file        	| Use twits file instead of twitter URL. <br/> <br/> Default: *false*.                                                                                                              	|
-| --output-twits-file 	| Output twits file location. If set, app writes info about twit to file. <br/> <br/> Default: *false*.                                                                             	|
-| --output-file       	| Output image file location. If set, twit (not twit file) writes in this location.<br/> See [Configuration of download](#configuration-of-download) for details.<br/> <br/> Default:  *not set* 	|
-| --logging           	| Logging level. You can get more info using *DEBUG* key.<br/> <br/> Default: *INFO*.                                                                                               	|
-| --update            	| Force update image. If not set, images aren't updated, if:<br/> - "image" key in twit config set <br/> - file with "image" key exists in file system<br/> <br/> Default: *false*. 	|
+```
+$ ./socialscreen shot --help
+Usage: cli.py shot [OPTIONS] [TWEETS]...
+
+  Screenshots and saves tweet(s), that passed as parameter(s).
+
+Options:
+  -c, --config-file PATH  configuration file
+  -d, --debug             debug output mode
+  -d, --destination PATH  folder to download image(s)
+  -f, --filename TEXT     filename or filename template
+  --help                  Show this message and exit.
+
+```
+
+```
+$ ./socialscreen process --help
+Usage: cli.py process [OPTIONS] TWEETS_FILE
+
+  Processes JSON file with tweets.
+
+Options:
+  -c, --config-file PATH  configuration file
+  -d, --debug             debug output mode
+  -d, --destination PATH  folder to download image(s)
+  -f, --filename TEXT     filename or filename template
+  -w, --write-changes     write changes to JSON file with tweets
+  -u, --update            update tweet images, if they are already exist
+  --help                  Show this message and exit.
+```
 
 Let's show all these options in one command:
 
 ```bash
-# pipenv run python src/cli.py  --config-file examples/config.chrome.json --twits-file examples/twits.json --logging DEBUG --output-twits-file examples/twits.output.json --update
+$ ./cli process --config-file examples/config.chrome.json --debug --destination images/ --filename "example-complex-{no}.png" --write-changes --update examples/tweets.json
 ```
 
 And here are the examples:

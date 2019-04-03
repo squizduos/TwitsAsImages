@@ -1,118 +1,155 @@
 #!/usr/bin/python
 import sys
 
-import argparse
+import click
 import logging
 import os
+from schematics.exceptions import DataError
 
 import exceptions
 import models
-from processor import TwitProcessor
+from helpers.twitter_embed_api import TwitterEmbedAPI
+from processor import TweetProcessor
 
 CURRENT_PATH = os.getcwd()
 
+logger = logging.getLogger("downloadTwits")
+logger.setLevel(logging.INFO)
+stdout_handler = logging.StreamHandler(sys.stdout)
+# noinspection SpellCheckingInspection
+formatter = logging.Formatter('[%(asctime)s] %(levelname)s - %(message)s')
+stdout_handler.setFormatter(formatter)
+logger.addHandler(stdout_handler)
 
-def main():
-    """
-    The main entry point of the application
-    """
-    logger = logging.getLogger("downloadTwits")
-    logger.setLevel(logging.INFO)
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    # noinspection SpellCheckingInspection
-    formatter = logging.Formatter('[%(asctime)s] %(levelname)s - %(message)s')
-    stdout_handler.setFormatter(formatter)
-    logger.addHandler(stdout_handler)
 
-    # Reads command line arguments
-    parser = argparse.ArgumentParser(description="Download twits as images, and resize it.")
-    parser.add_argument("--config-file", nargs="?", default="config.json", help="Application configuration file")
-    parser.add_argument("--twits-file", nargs="?", default="",
-                        help="Parse JSON files with twits, except of twitter URLs")
-    parser.add_argument("--logging", nargs="?", default="INFO", help="Logging level. Default: INFO")
-    parser.add_argument("--output-twits-file", nargs="?", default=None,
-                        help="JSON file to store results. If not set, results are not written to file.")
-    parser.add_argument("--output-file", nargs="?", default=None,
-                        help="Name of image file. If several files in config, _1, _2 and etc. suffix added.")
-    parser.add_argument("--update", action='store_const', const=True,
-                        help="Update twit images, if they are already exist.")
-    parser.add_argument("twit", metavar="URL", type=str, nargs='?', default=None, help="Twit URL or JSON twits file")
-    command_line_args = parser.parse_args()
-
-    # # Sets application config
+def prepare_config(config_file: str, destination: str or None, filename: str or None, update: bool = False):
     try:
-        app_config = models.AppConfig.load_from_file(command_line_args.config_file)
-    except FileNotFoundError:
-        logger.error(f"No configuration file in {command_line_args.config_file} found.")
+        app_config = models.AppConfig.load_from_file(config_file)
+    except exceptions.AppConfigValidationError as e:
+        logger.error(e)
         sys.exit(1)
+    app_config.download.path = destination if destination else app_config.download.path
+    app_config.download.name = filename if filename else app_config.download.name
+    app_config.download.update = update
+    try:
+        app_config.validate()
     except Exception as e:
-        logger.error(f"Unexpected error while reading application config: {e}")
+        logger.error(e)
         sys.exit(1)
+    return app_config
 
-    # Sets logging level
-    logger.setLevel(command_line_args.logging)
-    logger.info(f"Logging level: {command_line_args.logging}")
 
-    if command_line_args.twits_file:
-        # Reading twits from file
-        logger.info(f"Getting twits from file {command_line_args.twits_file}...")
-        try:
-            twits = models.Twits.load_from_file(command_line_args.twits_file)
-        except exceptions.TwitsConfigValidationError as e:
-            logger.info(f"Unable to parse file {command_line_args.twits_file}, errors: {e}.")
-            sys.exit(1)
+def process_tweets(config: models.AppConfig, tweets_list: models.TweetList) -> models.TweetList:
+    logger.debug(f"Initializing tweet processor for headless browser {config.headless_browser.name}...")
+    processor = TweetProcessor(config, logger=logger)
+
+    updated_tweets = models.TweetList()
+    updated_tweets.tweets = list()
+    for tweet in tweets_list.tweets:
+        if tweet.get('image', None):
+            twit_image_path = os.path.join(CURRENT_PATH, config.download.path, tweet.get('image'))
+            twit_image_exists = os.path.exists(twit_image_path)
         else:
-            logger.info(f"Read {len(twits.twits)} twits from file {command_line_args.twits_file}")
-    else:
-        logger.info(f"Getting twits from command line...")
-        twits = models.Twits()
-        twits.twits = list()
-        twits.twits.append(
-            models.Twit({"url": command_line_args.twit})
-        )
-        logger.info(f"Read {len(twits.twits)} twits from command line.")
-
-    # Initializing twit processor
-    logger.info(f"Initializing twit processor for headless browser {app_config.headless_browser.name}...")
-    processor = TwitProcessor(app_config, logger=logger)
-
-    # Detecting saved file template
-    if command_line_args.output_file:
-        app_config.download.template = command_line_args.output_file
-    else:
-        app_config.download.template = os.path.join(os.curdir, app_config.download.path, app_config.download.template)
-    logger.debug(f"Image file template {app_config.download.template}")
-
-    # Processing twits
-    updated_twits = models.Twits()
-    updated_twits.twits = list()
-    for twit in twits.twits:
-        twit_image_exists = bool(twit.get('image', None) and os.path.exists(os.path.join(
-            CURRENT_PATH,
-            app_config.download.path,
-            twit.get('image', None)
-        )))
-        if twit_image_exists and command_line_args.update != "update":
-            logger.info(f"Twit {twit.url} is already exist; skip.")
-            updated_twits.twits.append(twit)
+            twit_image_exists = False
+        if twit_image_exists and not config.download.update:
+            logger.info(f"Tweet {tweet.url} is already exist; skip.")
+            updated_tweets.tweets.append(tweet)
         else:
-            logger.info(f"Twit {twit.url} processing...")
-            updated_twit = processor.process_twit(twit)
-            if app_config.get('postprocess', None):
+            logger.info(f"Tweet {tweet.url} processing...")
+            updated_twit = processor.process_twit(tweet)
+            if config.get('postprocess', None):
                 updated_twit = processor.post_process_twit(updated_twit)
-            if twit:
-                logger.info(f"Twit {twit.url} is updated successfully and saved to {twit.image}!")
-                updated_twits.twits.append(updated_twit)
+            if tweet:
+                logger.info(f"Tweet {tweet.url} is updated successfully and saved to {tweet.image}!")
+                updated_tweets.tweets.append(updated_twit)
             else:
-                logger.info(f"Twit {twit.url} can't updated. Check logs.")
-                updated_twits.twits.append(twit)
+                logger.info(f"Tweet {tweet.url} can't updated. Check logs.")
+                updated_tweets.tweets.append(tweet)
+    return updated_tweets
 
-    if command_line_args.output_twits_file:
-        logger.info(f"Saving twits to {command_line_args.output_twits_file}...")
-        updated_twits.save_to_file(command_line_args.output_twits_file)
 
-    logger.info(f"Finished. Thanks.")
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
+@click.option("--config-file", "-c", type=click.Path(exists=True), default="config.json", help="configuration file")
+@click.option("--debug", "-d", is_flag=True, help="debug output mode")
+@click.option("--destination", "-d", type=click.Path(exists=True), help="folder to download image(s)")
+@click.option("--filename", "-f", type=click.STRING, help="filename or filename template")
+@click.option('--write-changes', '-w', is_flag=True, help='write changes to JSON file with tweets')
+@click.option('--update', '-u', is_flag=True, help='update tweet images, if they are already exist')
+@click.argument('tweets-file', type=click.Path(exists=True))
+def process(config_file: str, debug: bool, destination: str, filename: str, write_changes: bool, update: bool,
+            tweets_file: str):
+    """
+    Processes JSON file with tweets.
+    """
+    app_config = prepare_config(config_file, destination, filename, update)
+
+    if debug:
+        logger.setLevel(logging.DEBUG)
+        logger.debug("Enabled debug mode")
+
+    logger.debug(f"Loading tweets from file {tweets_file}...")
+    cli_tweets = models.TweetList()
+    cli_tweets.load_from_file(tweets_file)
+
+    logger.debug(f"Validating tweets from file {tweets_file}...")
+    try:
+        cli_tweets.validate()
+    except DataError as e:
+        logger.error(e)
+        exit(1)
+
+    logger.debug(f"Processing {len(cli_tweets.tweets)} tweets, loaded from file {tweets_file}...")
+    updated_tweets = process_tweets(app_config, cli_tweets)
+
+    if write_changes:
+        logger.debug(f"Writing {len(updated_tweets.tweets)} tweets to file {tweets_file}...")
+        updated_tweets.save_to_file(tweets_file)
+
+    logger.debug(f"Processing {len(cli_tweets.tweets)} tweets finished.")
+
+
+@cli.command()
+@click.option("--config-file", "-c", type=click.Path(exists=True), default="config.json", help="configuration file")
+@click.option("--debug", "-d", is_flag=True, help="debug output mode")
+@click.option("--destination", "-d", type=click.Path(exists=True), help="folder to download image(s)")
+@click.option("--filename", "-f", type=click.STRING, help="filename or filename template")
+@click.argument('tweets', nargs=-1)
+def shot(config_file: str, debug: bool, destination: str, filename: str, tweets: tuple):
+    """
+    Screenshots and saves tweet(s), that passed as parameter(s).
+    """
+    app_config = prepare_config(config_file, destination, filename)
+
+    if debug:
+        logger.setLevel(logging.DEBUG)
+        logger.debug("Enabled debug mode")
+
+    logger.debug(f"Loading tweets from CLI, {len(tweets)} URLs found.")
+    cli_tweets = models.TweetList()
+    cli_tweets.tweets = list()
+    for tweet_url in tweets:
+        clean_tweet_url = TwitterEmbedAPI.clean_tweet_url(tweet_url)
+        tweet = models.Tweet({
+            "url": clean_tweet_url
+        })
+        cli_tweets.tweets.append(tweet)
+
+    logger.debug("Validating tweets from CLI...")
+    try:
+        cli_tweets.validate()
+    except DataError as e:
+        logger.error(e)
+        exit(1)
+
+    logger.debug(f"Processing {len(cli_tweets.tweets)} tweets, loaded from CLI...")
+    process_tweets(app_config, cli_tweets)
+    logger.debug(f"Processing {len(cli_tweets.tweets)} tweets finished.")
 
 
 if __name__ == "__main__":
-    main()
+    cli()

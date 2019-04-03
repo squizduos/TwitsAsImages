@@ -4,12 +4,15 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+pyinstaller = "*"
+flake8 = "*"
 
 [packages]
 selenium = "*"
 requests = "*"
 schematics = "*"
 wand = "*"
+click = "*"
 
 [requires]
 python_version = "3.7"

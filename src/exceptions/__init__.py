@@ -1,5 +1,16 @@
+import os
+
+
 class AppConfigValidationError(Exception):
-    pass
+    def __init__(self, json_file: str, error: Exception or None = None, custom_message: str = ""):
+        base_message = f"Error while processing configuration file \"{os.path.abspath(json_file)}\""
+        if custom_message:
+            message = f"{base_message}: {custom_message}"
+        elif error:
+            message = f"{base_message}: original error message {str(error)}"
+        else:
+            message = f"{base_message}."
+        super().__init__(message)
 
 
 class TwitterAPIRequestError(Exception):
@@ -16,5 +27,13 @@ class HeadlessBrowserException(Exception):
     pass
 
 
-class TwitsConfigValidationError(Exception):
-    pass
+class TweetListValidationError(Exception):
+    def __init__(self, json_file: str, error: Exception or None = None, custom_message: str = ""):
+        base_message = f"Error while processing tweets file \"{os.path.abspath(json_file)}\""
+        if custom_message:
+            message = f"{base_message}: {custom_message}"
+        elif error:
+            message = f"{base_message}: original error message {str(error)}"
+        else:
+            message = f"{base_message}."
+        super().__init__(message)

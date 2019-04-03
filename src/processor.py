@@ -16,7 +16,7 @@ app_logger.setLevel(logging.INFO)
 CURRENT_PATH = os.getcwd()
 
 
-class TwitProcessor:
+class TweetProcessor:
     def __init__(self, app_config: models.AppConfig, **kwargs):
         self.app_config = app_config
         self.logger = kwargs.get('logger', app_logger)
@@ -50,7 +50,7 @@ class TwitProcessor:
         :param url_data: URL data about twit (author & id)
         :return:
         """
-        filename = self.app_config.download.template
+        filename = self.app_config.download.name
 
         if "{id}" in filename:
             filename = filename.replace("{id}", url_data['id'])
@@ -63,26 +63,27 @@ class TwitProcessor:
             filename = filename.replace("{random}", random_string)
 
         if "{no}" in filename:
-            directory = os.path.dirname(os.path.join(CURRENT_PATH, filename))
+            directory = os.path.dirname(os.path.join(CURRENT_PATH, self.app_config.download.path, filename))
             filename_beginning, _ = filename.split("{no}")
             no = sum((int(el.startswith(filename_beginning)) for el in os.listdir(directory)))
             filename = filename.replace("{no}", str(no + 1))
 
         return filename
 
-    def process_twit(self, twit: models.Twit) -> models.Twit or None:
+    def process_twit(self, twit: models.Tweet) -> models.Tweet or None:
         """
         Downloads twit as image and saves it to file
 
         :param twit: Twit object
         :return: Twit object is not error; else None
         """
-        url_data = TwitterEmbedAPI.get_twit_url_data(twit.url)
+        url_data = TwitterEmbedAPI.get_tweet_url_data(twit.url)
         self.logger.debug(f"Getting image file name for {twit.url}...")
         image_filename = self.get_image_file_name(url_data)
+        image_path = os.path.join(self.app_config.download.path, image_filename)
         self.logger.debug(f"Getting image file name for twit {twit.url} finished! File name is {image_filename}.")
         self.logger.debug(f"Getting Twitter embed HTML for twit {twit.url}...")
-        twit_embed_html = TwitterEmbedAPI.get_twit_embed_html(
+        twit_embed_html = TwitterEmbedAPI.get_tweet_embed_html(
             twit.url,
             self.app_config.twit_embed
         )
@@ -92,17 +93,17 @@ class TwitProcessor:
         self.logger.debug(f"Rendering HTML embed for twit {twit.url}...")
         self.browser.render_html(twit_embed_html)
         self.logger.debug(f"Rendered HTML embed for twit {twit.url} at file {self.browser.current_opened_page}.")
+        self.logger.debug(f"Saving twit image for twit {twit.url} to {image_path}...")
+        self.browser.take_screenshot(image_path, delay=20)
+        self.logger.debug(f"Writing new data to Twit class for twit {twit.url}")
         self.logger.debug(f"Getting text of twit for twit {twit.url}...")
         twit_text = self.get_twit_text()
         self.logger.debug(f"Getting text of twit for twit {twit.url} finished; found text {twit_text}")
-        self.logger.debug(f"Saving twit image for twit {twit.url} to {image_filename}...")
-        self.browser.take_screenshot(image_filename, delay=20)
-        self.logger.debug(f"Writing new data to Twit class for twit {twit.url}")
         twit.text = twit_text
-        twit.image = image_filename
+        twit.image = image_path
         return twit
 
-    def post_process_twit(self, twit: models.Twit) -> models.Twit or None:
+    def post_process_twit(self, twit: models.Tweet) -> models.Tweet or None:
         """
         Post-process twit image
 
